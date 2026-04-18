@@ -20,14 +20,16 @@ export async function POST(req: Request) {
       const hoursOld = Math.max(1, (now.getTime() - publishedAt.getTime()) / (1000 * 60 * 60));
       const rawVelocity = v.viewCount / hoursOld;
       
-      // Recency Boost: Give 1.5x weight to videos < 48 hours old
-      const recencyBoost = hoursOld < 48 ? 1.5 : 1;
-      const viralScore = Math.floor(rawVelocity * recencyBoost);
+      // Authority weighting: log10(subscriber_count + 1)
+      const authorityWeight = Math.log10(v.subscriberCount + 11); // +11 to ensure minimum weight of ~1
+      const viralScore = Math.floor(rawVelocity * authorityWeight);
 
       return {
         ...v,
         velocity: viralScore,
-        hoursOld
+        hoursOld,
+        isHighAuthority: v.subscriberCount > 50000,
+        signalStrength: viralScore > 100 ? "STRATEGIC" : "ORGANIC"
       };
     });
 

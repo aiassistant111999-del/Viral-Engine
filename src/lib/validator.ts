@@ -1,13 +1,12 @@
-/**
- * ViralEngine Output Validation System
- * Self-checking AI for quality control
- */
+import { callGeminiResilient } from "./gemini";
 
 export interface ValidationResult {
   hook_strength: number;
   originality: number;
   clarity: number;
   virality_potential: number;
+  market_competition_score: number;
+  would_click: boolean;
   issues: string[];
   final_verdict: "PASS" | "IMPROVE";
   why_not_higher: string;
@@ -16,99 +15,76 @@ export interface ValidationResult {
 }
 
 export async function validateOutput(aiOutput: string): Promise<ValidationResult | null> {
-  // Fail-safe for garbage output
   if (!aiOutput || aiOutput.length < 20) {
     console.error("VALIDATION FAIL: Output too short or empty");
     return null;
   }
 
   const prompt = `
-You are an EXTREMELY strict quality control system for viral content.
+You are an EXTREMELY brutal, market-aware quality control system for viral YouTube content.
+Your job is to KILL average ideas and only let through "Deadly Hooks" that can compete with the top 1% of YouTube.
 
-Evaluate the following content:
+TASK:
+Evaluate if the following content would actually WIN against currently trending videos in its niche.
 
+CONTENT:
 ${aiOutput}
 
-STRICT SCORING RULES:
-- Be extremely strict. Do NOT give scores above 7 unless content is truly exceptional.
-- Penalize: generic phrases, weak hooks, repeated formats, obvious ideas
-- Only give 8+ if it feels highly viral AND unique
-- Compare to top-performing YouTube videos - would this compete with them?
-- If not competitive with top creators, reduce score and explain why.
+BRUTAL SCORING RULES:
+1. MARKET FIT OVER WRITING: Do not evaluate how well it is written. Evaluate COMPETITIVENESS.
+2. FORCED COMPARISON: If this idea appeared in a sidebar next to the top 10 most viral videos in this niche, would a user CLICK this? If "No", the virality_potential MUST be < 5.
+3. MARKET FAILURE DETECTION: Penalize heavily (max score 4) if:
+   - It is a generic "Top 5" or "Best Tools" list.
+   - It lacks a specific "Psychological Trigger" (Fear, Money, Status, Mistake).
+   - The hook is descriptive instead of curiosity-driven.
+   - It feels like "ChatGPT generated" fluff.
+4. BRUTAL BIAS: Be harsh. Most ideas should NOT pass. Only give 8+ for world-class, dangerous-to-ignore concepts.
 
-Score each (1-10):
-1. Hook strength - Does it stop the scroll instantly?
-2. Originality - Is this fresh or just a copy?
-3. Clarity - Is the value proposition crystal clear?
-4. Virality potential - Would people share this?
-
-Return ONLY valid JSON. No extra text. No markdown.
-
+OUTPUT FORMAT (STRICT JSON):
 {
   "hook_strength": number,
   "originality": number,
   "clarity": number,
   "virality_potential": number,
-  "issues": ["specific issues found"],
-  "why_not_higher": "One sentence explaining why score isn't higher",
+  "market_competition_score": number, (1-10 vs top viral competitors)
+  "would_click": boolean, (Would a user click this next to a viral video?)
+  "issues": ["specifically why this would fail in the market"],
+  "why_not_higher": "One brutal sentence explaining why this isn't a 10",
   "final_verdict": "PASS" or "IMPROVE"
 }
 `;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
-    }
-  );
-
-  const data = await res.json();
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  
-  if (!rawText) return null;
-  
   try {
-    // Clean and parse JSON strictly
+    const result = await callGeminiResilient(prompt);
+    const rawText = result.response.text();
+    if (!rawText) return null;
+
     let cleaned = rawText.replace(/```json|```/g, "").trim();
-    // Remove any text before or after JSON object
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error("VALIDATION FAIL: No JSON object found in response");
-      return null;
-    }
+    if (!jsonMatch) return null;
     const review = JSON.parse(jsonMatch[0]);
-    console.log("VALIDATION PARSED:", review);
+    console.log("MARKET VALIDATION PARSED:", review);
     return review;
   } catch (e) {
-    console.error("VALIDATION PARSE ERROR:", e, "Raw:", rawText);
+    console.error("VALIDATION ERROR:", e);
     return null;
   }
 }
 
-/**
- * Calculate average score from validation result
- */
 export function calculateAvgScore(review: ValidationResult): number {
-  return (review.hook_strength + review.originality + review.clarity + review.virality_potential) / 4;
+  return (review.hook_strength + review.originality + review.clarity + review.virality_potential + review.market_competition_score) / 5;
 }
 
-/**
- * Check if output passes quality threshold
- */
 export function passesThreshold(review: ValidationResult): boolean {
   const avgScore = calculateAvgScore(review);
-  return review.final_verdict === "PASS" && avgScore >= 7;
+  return (
+    review.final_verdict === "PASS" &&
+    avgScore >= 7.5 &&
+    review.would_click === true &&
+    review.market_competition_score >= 7
+  );
 }
 
-/**
- * Select the best idea from a list
- */
 export async function selectBestIdea(ideas: any[]): Promise<{ index: number; reason: string } | null> {
   if (!ideas || ideas.length === 0) return null;
 
@@ -129,21 +105,11 @@ Return ONLY valid JSON:
 }
 `;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    }
-  );
-
-  const data = await res.json();
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  
-  if (!rawText) return null;
-  
   try {
+    const result = await callGeminiResilient(prompt);
+    const rawText = result.response.text();
+    if (!rawText) return null;
+
     const jsonMatch = rawText.replace(/```json|```/g, "").trim().match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     return JSON.parse(jsonMatch[0]);
@@ -153,54 +119,35 @@ Return ONLY valid JSON:
 }
 
 export async function improveOutput(originalOutput: string, issues: string[] = []): Promise<string> {
-  // Fail-safe for garbage input
-  if (!originalOutput || originalOutput.length < 20) {
-    return "Regenerate — output not valid";
-  }
+  if (!originalOutput || originalOutput.length < 20) return originalOutput;
 
-  const issuesText = issues.length > 0 ? issues.map(i => `- ${i}`).join("\n") : "- Hook not curiosity-driven\n- Generic phrasing\- Weak emotional trigger";
+  const issuesText = issues.length > 0 ? issues.map(i => `- ${i}`).join("\n") : "- Weak hooks";
 
   const prompt = `
-You are a viral content expert.
+You are a viral content strategist specializing in MARKET REVERSAL.
 
-Improve the following content based on these issues:
+Your task is to REBUILD these failing content ideas to win against world-class YouTube competitors.
 
-Issues:
+The original output failed for these reasons:
 ${issuesText}
 
-Content:
-${originalOutput}
-
-Rules:
-- Make hooks more curiosity-driven
-- Remove generic phrasing
-- Add strong emotional trigger (fear, money, mistake)
-- Keep it short and punchy
+STRICT RULES FOR REBUILDING:
+1. CREATE A CURIOSITY GAP: The hook must make it impossible NOT to click. Move from "How to X" to "The secret reason X is failing".
+2. INJECT HIGH-STAKES TRIGGERS: Use Fear, Money, Status, or Mistakes.
+3. REMOVE CORPORATE FLUFF: No "Unlock your potential" or "Discover the best". Use raw, human, punchy language.
+4. MARKET-AWARENESS: If a top YouTuber saw this, they should feel threatened by the angle.
 
 Return improved version as JSON array only. No extra text.
 `;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
-    }
-  );
+  try {
+    const result = await callGeminiResilient(prompt);
+    const improved = result.response.text();
+    if (!improved || improved.length < 20) return originalOutput;
 
-  const data = await res.json();
-  const improved = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  
-  if (!improved || improved.length < 20) {
-    console.error("IMPROVE FAIL: Output too short, returning original");
+    console.log("IMPROVED OUTPUT (Resilient Path)");
+    return improved;
+  } catch (e) {
     return originalOutput;
   }
-  
-  console.log("IMPROVED OUTPUT:", improved.substring(0, 200) + "...");
-  return improved;
 }

@@ -7,17 +7,17 @@ import {
   Target, BarChart3, Calendar, Activity, Zap, TrendingUp,
   BrainCircuit, AlertTriangle, DollarSign, Bomb, Lightbulb, 
   Crown, RefreshCw, Layers, Eye, Music, Camera, Edit3,
-  Copy, Check, Lock, MousePointer2
+  Copy, Check, Lock, MousePointer2, ArrowRight, CheckCircle2, Flame
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import Link from "next/link";
 import { saveToMemory, getMemory } from "@/lib/memory";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Animation Variants
 const container: Variants = {
   hidden: { opacity: 0 },
   show: {
@@ -31,113 +31,168 @@ const item: Variants = {
   show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 100 } }
 };
 
-export default function ContentEngine() {
+export default function Home() {
   const [keyword, setKeyword] = useState("");
-  const [loading, setLoading] = useState<string | null>(null);
   const [videos, setVideos] = useState<any[]>([]);
+  const [ideas, setIdeas] = useState<any[]>([]);
   const [analysis, setAnalysis] = useState<any>(null);
   const [detectedPatterns, setDetectedPatterns] = useState<any[]>([]);
-  const [ideas, setIdeas] = useState<any[]>([]);
+  const [loading, setLoading] = useState<string | null>(null);
   const [activePlan, setActivePlan] = useState<{ id: any; content: string } | null>(null);
   const [selectedAngle, setSelectedAngle] = useState("default");
   const [generationCount, setGenerationCount] = useState(0);
+  const [nicheDecision, setNicheDecision] = useState<any>(null);
+  const [isNicheActive, setIsNicheActive] = useState(false);
+  const [nicheContext, setNicheContext] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState({ skill: "talking", interest: "tech", goal: "fast growth" });
+
+  const [activeVideoAudit, setActiveVideoAudit] = useState<{ id: string; data: any } | null>(null); // New Video Audit state
+  const [activeFabula, setActiveFabula] = useState<{ id: any; data: any } | null>(null); // New Fabula state
   const [error, setError] = useState<string | null>(null);
   const [statusLogs, setStatusLogs] = useState<string[]>([]);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isReturning, setIsReturning] = useState(false);
 
-  // Auto-Demo Onboarding
   useEffect(() => {
-    if (videos.length === 0 && !loading && keyword === "" && generationCount === 0) {
-      const timer = setTimeout(() => {
-        setKeyword("AI Automation");
-        setTimeout(() => handleAnalyze(), 600);
-      }, 5000);
-      return () => clearTimeout(timer);
+    const memory = getMemory();
+    if (memory && memory.pastIdeas && memory.pastIdeas.length > 0) {
+      setIsReturning(true);
     }
   }, []);
 
-  const copyToClipboard = (text: string, label: string) => {
+  const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
-    setCopiedId(label);
+    setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-   const handleAnalyze = async () => {
+  const handleAnalyze = async (overrideKeyword?: string) => {
+    const searchKeyword = overrideKeyword || keyword;
+    if (!searchKeyword) return;
     setError(null);
     setLoading("analyze");
     setVideos([]);
-    setAnalysis(null);
     setIdeas([]);
-    setStatusLogs(["🔍 SCANNING YOUTUBE MARKET...", "📊 CALCULATING VIRAL VELOCITY...", "🧠 EXTRACTING PATTERNS..."]);
-    
+    setAnalysis(null);
+    setNicheDecision(null);
+    setIsNicheActive(false);
+    setStatusLogs(["INITIALIZING MARKET AUDIT...", "CONNECTING TO HIGH-VELOCITY SIGNALS...", "BYPASSING NOISE..."]);
+
+    const normalizedInput = searchKeyword.toLowerCase();
+    const isNicheIntent = normalizedInput.includes("which") || normalizedInput.includes("what") || normalizedInput.includes("niche") || normalizedInput.includes("start");
+
+    if (isNicheIntent) {
+      setStatusLogs([
+        "Analyzing market signals...",
+        "Matching with your strengths...",
+        "Detecting opportunity gaps...",
+        "Making final decision..."
+      ]);
+    } else {
+      setStatusLogs(["INITIALIZING MARKET AUDIT...", "CONNECTING TO HIGH-VELOCITY SIGNALS...", "BYPASSING NOISE..."]);
+    }
+
     try {
-      const res = await fetch("/api/analyze", { method: "POST", body: JSON.stringify({ keyword: keyword || "AI Automation" }) });
+      if (isNicheIntent) {
+        setIsNicheActive(true);
+        const res = await fetch("/api/niche", { method: "POST", body: JSON.stringify({ input: searchKeyword, userProfile }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Niche analysis failed");
+        setNicheDecision(data);
+        setNicheContext(data.reasoning ? data.reasoning.join(" ") : ""); // Store the "Why"
+        setStatusLogs(prev => [...prev, "MARKET AUDIT COMPLETE.", "BEST PICK IDENTIFIED."]);
+        return;
+      }
+
+      const res = await fetch("/api/analyze", { method: "POST", body: JSON.stringify({ keyword: searchKeyword }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Analysis failed");
       
-      // Instant feedback - show found videos immediately
-      const foundCount = data.videos?.length || 0;
-      setStatusLogs(prev => [...prev, `Found ${foundCount} high-performing videos`]);
-      
-      setStatusLogs(prev => [...prev, "MARKET DNA DECRYPTED.", "EXTRACTING GROWTH VELOCITY SIGNALS...", "DETECTING CONTENT GAPS..."]);
       setVideos(data.videos || []);
       setAnalysis(data.analysis || null);
-      setDetectedPatterns(data.detectedPatterns || []);
-      setStatusLogs(prev => [...prev, "INTELLIGENCE PASS COMPLETE."]);
-
-      if (data.analysis?.dominantPatterns) {
-        saveToMemory(keyword || "AI Automation", [], data.analysis.dominantPatterns.map((p: string) => ({ pattern: p })));
-      }
+      setDetectedPatterns(data.analysis?.dominantPatterns?.map((p: any) => ({ 
+        type: p.toLowerCase().includes('curiosity') ? 'curiosity' : p.toLowerCase().includes('list') ? 'list' : 'strategy', 
+        pattern: p 
+      })) || []);
+      
+      setStatusLogs(prev => [...prev, "SIGNALS DETECTED.", "VELOCITY CALCULATED.", "READY FOR SYNTHESIS."]);
     } catch (e: any) {
       setError(e.message);
     } finally { setLoading(null); }
   };
 
-   const handleGenerateIdeas = async (angle: string = "default") => {
-    setError(null);
+  const handleGenerateIdeas = async (angle: string = "default") => {
     setSelectedAngle(angle);
+    setError(null);
     setLoading("ideas");
-    const memory = getMemory();
-    setStatusLogs(["CONSULTING STRATEGIC BRAIN...", `SWITCHING TO ${angle.toUpperCase()} ANGLE...`]);
+    setStatusLogs(["ACCESSING PSYCHOLOGICAL TRIGGERS...", "SHARPENING HOOKS...", "CALIBRATING RETENTION..."]);
+    
     try {
-      const res = await fetch("/api/ideas", {
-        method: "POST",
+      const res = await fetch("/api/ideas", { 
+        method: "POST", 
         body: JSON.stringify({ 
           keyword, 
           analysis, 
           titles: videos.map(v => v.title), 
           angle,
-          pastIdeas: memory.pastIdeas
-        })
+          pastIdeas: ideas.map(i => i.title),
+          nicheContext // Inject the strategic reasoning
+        }) 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Idea generation failed");
       
-      setStatusLogs(prev => [...prev, "ENSURING NOVELTY CHECK...", "SCORING VIRALITY SIGNALS...", "SYNTHESIZING ELITE BLUEPRINTS..."]);
       setIdeas(data.ideas || []);
       setGenerationCount(prev => prev + 1);
-      setStatusLogs(prev => [...prev, "STRATEGY READY."]);
       saveToMemory(keyword, data.ideas || [], []);
+      setStatusLogs(prev => [...prev, "IDEAS SYNTHESIZED.", "STRATEGY READY."]);
     } catch (e: any) {
       setError(e.message);
     } finally { setLoading(null); }
   };
 
-   const handleFetchPlan = async (idea: any) => {
+  const handleFetchPlan = async (idea: any) => {
     setError(null);
     setLoading(`plan-${idea.id}`);
-    setStatusLogs(["INITIATING EXECUTION BLUEPRINTING...", "GENERATING AI SCENE BOARDS...", "CUEING SOUND DESIGN SFX..."]);
+    setStatusLogs(["INITIATING BLUEPRINT...", "GENERATING SCENE BOARDS..."]);
     try {
       const res = await fetch("/api/script", { method: "POST", body: JSON.stringify({ idea }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Execution plan failed");
-      
-      setStatusLogs(prev => [...prev, "POLISHING NATURAL VO...", "FINALIZING PRODUCTION SYSTEM."]);
       setActivePlan({ id: idea.id, content: data.plan });
+      setStatusLogs(prev => [...prev, "PRODUCTION SYSTEM READY."]);
     } catch (e: any) {
       setError(e.message);
     } finally { setLoading(null); }
+  };
+  const handleFetchFabula = async (idea: any) => {
+    setError(null);
+    setLoading(`fabula-${idea.id}`);
+    setStatusLogs(["ENGAGING FABULA ENGINE...", "DECONSTRUCTING NARRATIVE...", "MAPPING SYUZHET FLOW..."]);
+    try {
+      const res = await fetch("/api/fabula", { method: "POST", body: JSON.stringify({ idea }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Fabula generation failed");
+      setActiveFabula({ id: idea.id, data: data.fabula });
+      setStatusLogs(prev => [...prev, "STORY ARCHITECTURE STABLIZED."]);
+    } catch (e: any) {
+      setError(e.message);
+    } finally { setLoading(null); }
+  };
+
+
+  const handleAnalyzeVideo = async (video: any) => {
+    setActiveVideoAudit({ id: video.id, data: null });
+    try {
+      const res = await fetch("/api/video-audit", { method: "POST", body: JSON.stringify({ video }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Audit failed");
+      setActiveVideoAudit({ id: video.id, data });
+    } catch (e: any) {
+      setError(e.message);
+      setActiveVideoAudit(null);
+    }
   };
 
   const handlePivot = async (idea: any, angle: string) => {
@@ -146,7 +201,6 @@ export default function ContentEngine() {
       const res = await fetch("/api/pivot", { method: "POST", body: JSON.stringify({ idea, angle }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Pivot failed");
-      
       setIdeas(prev => prev.map(i => i.id === idea.id ? { ...data.idea, id: i.id } : i));
     } catch (e: any) {
       setError(e.message);
@@ -155,512 +209,488 @@ export default function ContentEngine() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-slate-100 font-sans selection:bg-indigo-500/30 overflow-x-hidden relative pb-32">
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[20%] w-[600px] h-[600px] bg-indigo-600/5 blur-[120px] rounded-full opacity-40" />
-        <div className="absolute bottom-[-10%] right-[10%] w-[500px] h-[500px] bg-purple-600/5 blur-[120px] rounded-full opacity-30" />
-      </div>
-
       <nav className="fixed top-0 left-0 right-0 z-50 p-4 md:p-6 flex justify-between items-center backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shrink-0">
             <Zap className="w-4 h-4 text-white" />
           </div>
-          <span className="font-black text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.4em] whitespace-nowrap">ViralEngine<span className="text-indigo-500">.AI</span></span>
+          <span className="font-black text-[10px] md:text-xs uppercase tracking-[0.4em] whitespace-nowrap">ViralEngine<span className="text-indigo-500">.AI</span></span>
         </div>
-        <div className="flex items-center gap-4 md:gap-6">
-           <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest hidden lg:block">Status: <span className="text-emerald-500">System Live</span></span>
-           <button className="px-4 md:px-5 py-2 md:py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-indigo-500/20 transition-all">Sign In</button>
+
+        <div className="flex items-center gap-2 p-1.5 bg-white/[0.03] border border-white/5 rounded-2xl backdrop-blur-xl">
+           <button 
+             onClick={() => setIsNicheActive(true)}
+             className={cn("px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2", isNicheActive ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" : "text-slate-500 hover:text-white")}
+           >
+             <Target className="w-3 h-3" />
+             Strategist
+           </button>
+           <button 
+             onClick={() => setIsNicheActive(false)}
+             className={cn("px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2", !isNicheActive ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" : "text-slate-500 hover:text-white")}
+           >
+             <Zap className="w-3 h-3" />
+             Generator
+           </button>
+           <Link 
+             href="/fabula"
+             className="px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 text-slate-500 hover:text-white"
+           >
+             <Crown className="w-3 h-3 text-amber-500" />
+             Story
+           </Link>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto pt-32 md:pt-40 px-4 md:px-8 2xl:px-16 relative z-10">
-        <section className="text-center space-y-8 md:space-y-12 mb-16 md:mb-32">
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-black uppercase tracking-[0.2em]">
-            <Crown className="w-4 h-4 text-amber-500 animate-pulse" />
-            Strategic content brain active
-          </motion.div>
-          <motion.h1 initial={{ opacity: 0, filter: "blur(10px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} transition={{ duration: 0.8 }} className="text-5xl md:text-7xl lg:text-9xl font-black tracking-tighter text-white max-w-5xl mx-auto leading-[1.1] md:leading-[0.8]">
+      <main className="max-w-7xl mx-auto pt-32 md:pt-40 px-4 md:px-8 relative z-10">
+        <section className="text-center space-y-12 mb-16 md:mb-32">
+          <h1 className="text-5xl md:text-7xl lg:text-9xl font-black tracking-tighter text-white max-w-5xl mx-auto leading-[0.8]">
             STOP GUESSING <br />
             <span className="text-indigo-500 italic">WHAT TO POST.</span>
-          </motion.h1>
-          <p className="text-slate-500 font-bold uppercase tracking-[0.4em] text-[10px] sm:text-xs">Find viral ideas using real YouTube data in seconds</p>
+          </h1>
+          <p className="text-slate-500 font-bold uppercase tracking-[0.4em] text-xs">Based on real YouTube data in seconds</p>
           
+          {isNicheActive && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center justify-center gap-4 max-w-4xl mx-auto pt-6 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-slate-400">
+              <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 pl-4 pr-2 py-2 rounded-[2rem] shadow-lg shadow-black/20">
+                <span className="text-slate-500">Skill:</span>
+                <select className="bg-transparent text-white focus:outline-none cursor-pointer p-1" value={userProfile.skill} onChange={e => setUserProfile(prev => ({...prev, skill: e.target.value}))}>
+                  <option className="bg-black" value="talking">Talking</option>
+                  <option className="bg-black" value="editing">Editing</option>
+                  <option className="bg-black" value="research">Research</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 pl-4 pr-2 py-2 rounded-[2rem] shadow-lg shadow-black/20">
+                <span className="text-slate-500">Interest:</span>
+                <select className="bg-transparent text-white focus:outline-none cursor-pointer p-1" value={userProfile.interest} onChange={e => setUserProfile(prev => ({...prev, interest: e.target.value}))}>
+                  <option className="bg-black" value="tech">Tech & AI</option>
+                  <option className="bg-black" value="fitness">Fitness</option>
+                  <option className="bg-black" value="finance">Finance</option>
+                  <option className="bg-black" value="motivation">Motivation</option>
+                  <option className="bg-black" value="gaming">Gaming</option>
+                  <option className="bg-black" value="education">Education</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 pl-4 pr-2 py-2 rounded-[2rem] shadow-lg shadow-black/20">
+                <span className="text-slate-500">Goal:</span>
+                <select className="bg-transparent text-indigo-400 font-bold focus:outline-none cursor-pointer p-1" value={userProfile.goal} onChange={e => setUserProfile(prev => ({...prev, goal: e.target.value}))}>
+                  <option className="bg-black" value="fast growth">Fast Growth</option>
+                  <option className="bg-black" value="long-term brand">Long-term Brand</option>
+                  <option className="bg-black" value="money">Money</option>
+                </select>
+              </div>
+            </motion.div>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-6 max-w-4xl mx-auto pt-10">
-            <div className="flex-1 relative group">
-              <MousePointer2 className="w-5 h-5 text-slate-700 absolute left-4 md:left-6 top-1/2 -translate-y-1/2 opacity-50 group-hover:scale-110 transition-transform" />
-              <input
-                type="text"
-                placeholder="Try: AI Tools, Fitness, Motivation..."
-                className="w-full pl-12 md:pl-16 pr-6 md:pr-8 py-4 md:py-7 rounded-[2rem] md:rounded-[2.5rem] border border-white/5 bg-white/[0.03] text-white shadow-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all font-black placeholder:text-slate-700 text-base md:text-xl"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
-              />
-            </div>
-            <button onClick={handleAnalyze} disabled={!!loading} className="w-full md:w-auto px-6 md:px-14 py-4 md:py-7 bg-indigo-600 text-white rounded-[2rem] md:rounded-[2.5rem] font-black text-lg md:text-xl hover:bg-indigo-500 transition-all disabled:opacity-50 flex items-center justify-center gap-4 shadow-2xl shadow-indigo-600/30 group whitespace-normal md:whitespace-nowrap">
-              {loading === "analyze" ? (
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  ANALYZING...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-                  Find Viral Ideas Now
-                </>
-              )}
+            <input
+              type="text"
+              placeholder="Try: AI Tools vs Fitness vs Finance..."
+              className="w-full px-8 py-7 rounded-[2.5rem] border border-white/5 bg-white/[0.03] text-white shadow-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all font-black text-xl placeholder:text-slate-700"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
+            />
+            <button onClick={() => handleAnalyze()} disabled={!!loading} className="px-14 py-7 bg-indigo-600 text-white rounded-[2.5rem] font-black text-xl hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-600/30 flex items-center justify-center gap-4">
+              {loading === "analyze" ? <Loader2 className="w-6 h-6 animate-spin" /> : "AUDIT MARKET"}
             </button>
           </div>
 
-          <AnimatePresence>
-            {statusLogs.length > 0 && loading && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="max-w-2xl mx-auto mt-8 md:mt-12 bg-[#111114] border border-white/5 rounded-2xl md:rounded-3xl p-6 md:p-8 font-mono text-[9px] md:text-[10px] text-indigo-400 space-y-2 shadow-2xl overflow-x-hidden">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                  <span className="font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-white">Live Intelligence Feed</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-w-4xl mx-auto mt-8">
+            {(isNicheActive
+              ? [
+                  "Which is more profitable: AI tools vs Personal Finance?",
+                  "I'm a beginner with no budget. What niche should I start?",
+                  "Is the fitness/gym niche too saturated to start in?",
+                  "Gaming vs Tech Reviews: Which has better sponsor rates?",
+                  "What are the most explosive faceless niches right now?",
+                  "What niche works best for purely educational content?"
+                ]
+              : [
+                  "How do I make a viral hook for a video about AI?",
+                  "Top 10 mistakes beginner YouTube creators make",
+                  "Content ideas for a Faceless psychology hacks channel",
+                  "How to explain complex finance concepts simply",
+                  "Content strategy for a 30-day fitness transformation",
+                  "Hidden secrets real estate agents don't tell you"
+                ]
+            ).map((promptText, idx) => (
+              <button 
+                key={idx}
+                onClick={() => { setKeyword(promptText); handleAnalyze(promptText); }}
+                className="flex items-start text-left gap-3 px-4 py-3 bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 rounded-xl transition-all group"
+              >
+                <div className="pt-0.5">
+                  {isNicheActive ? (
+                    <Target className="w-4 h-4 text-indigo-400 opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+                  ) : (
+                    <Lightbulb className="w-4 h-4 text-emerald-400 opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+                  )}
                 </div>
-                {statusLogs.map((log, i) => (
-                  <motion.div initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} key={i} className="flex items-center gap-3 text-left">
-                    <span className="text-slate-700">[{new Date().toLocaleTimeString([], {hour12: false})}]</span>
-                    <span className="font-bold tracking-widest">{log}</span>
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <div>
+                  <div className="text-[11px] font-bold text-slate-300 leading-snug line-clamp-2">{promptText}</div>
+                </div>
+              </button>
+            ))}
+          </div>
         </section>
 
         <AnimatePresence>
-          {videos.length > 0 && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-16 md:space-y-40">
-              <section className="bg-white/[0.02] border border-white/5 rounded-3xl md:rounded-[4rem] p-6 md:p-16 overflow-hidden relative backdrop-blur-3xl shadow-xl md:shadow-[0_0_80px_rgba(0,0,0,0.5)]">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-20 relative z-10">
-                  <div className="space-y-16">
-                    <div className="space-y-4">
-                       <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-white flex items-center gap-4 italic tracking-tight">
-                         <Layers className="w-8 h-8 text-indigo-500" />
-                         Pattern Intelligence
-                       </h2>
-                       <p className="text-slate-500 font-bold uppercase tracking-[0.4em] text-[10px]">What is winning right now</p>
-                    </div>
-                    <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {detectedPatterns.slice(0, 6).map((p, i) => (
-                        <motion.div key={i} variants={item} className="p-5 bg-white/5 border border-white/10 rounded-2xl group hover:border-indigo-500/50 transition-all">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className={cn("w-2.5 h-2.5 rounded-full", p.type === 'curiosity' ? "bg-purple-500 shadow-[0_0_15px_#a855f7]" : p.type === 'list' ? "bg-blue-500 shadow-[0_0_15px_#3b82f6]" : "bg-red-500 shadow-[0_0_15px_#ef4444]")} />
-                            <span className="text-[10px] font-black uppercase text-indigo-400">{p.type} pattern</span>
-                          </div>
-                          <div className="text-xs text-slate-300 font-bold line-clamp-2">{p.pattern}</div>
-                        </motion.div>
-                      ))}
-                    </motion.div>
+          {loading && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mb-20 space-y-4">
+              {statusLogs.map((log, i) => (
+                <div key={i} className="text-xs font-black uppercase tracking-[0.3em] text-indigo-400/60 animate-pulse">{log}</div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                    {analysis && (
-                      <div className="space-y-12 pt-12 border-t border-white/5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                          <div className="space-y-6">
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-400 flex items-center gap-3">
-                              <BrainCircuit className="w-4 h-4" />
-                              Psychological Drivers
-                            </h4>
-                            <div className="space-y-2">
-                              {analysis.psychologicalDrivers?.map((driver: string, idx: number) => (
-                                <div key={idx} className="p-4 bg-purple-500/5 rounded-2xl border border-purple-500/10 text-[11px] font-bold text-slate-400">
-                                  {driver}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="space-y-6">
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-400 flex items-center gap-3">
-                              <TrendingUp className="w-4 h-4" />
-                              Emerging Opportunities
-                            </h4>
-                            <div className="space-y-2">
-                              {analysis.emergingOpportunities?.map((opp: string, idx: number) => (
-                                <div key={idx} className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 text-[11px] font-bold text-slate-400">
-                                  {opp}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="space-y-6">
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-red-400 flex items-center gap-3">
-                              <AlertTriangle className="w-4 h-4" />
-                              Saturated Angles
-                            </h4>
-                            <div className="space-y-2">
-                              {analysis.saturatedAngles?.map((angle: string, idx: number) => (
-                                <div key={idx} className="p-4 bg-red-500/5 rounded-2xl border border-red-500/10 text-[11px] font-bold text-slate-400">
-                                  {angle}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+        <AnimatePresence>
+          {isNicheActive && nicheDecision && (
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-16">
+              <div className="text-center space-y-4">
+                <div className="flex flex-col items-center justify-center space-y-6 mb-12">
+                  <div className="h-px w-24 bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
+                  <h2 className="text-sm font-black uppercase tracking-[0.4em] text-indigo-500 flex items-center gap-3">
+                    <Target className="w-5 h-5 text-amber-400" />
+                    Venture Mentor V2
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-12">
+                  {nicheDecision.comparison.map((n: any) => (
+                    <div key={n.niche} className={cn("p-8 rounded-[3rem] border transition-all", n.niche === nicheDecision.winner ? "bg-indigo-600/10 border-indigo-500/40 shadow-2xl shadow-indigo-600/20" : "bg-white/[0.02] border-white/5 opacity-40")}>
+                      <h3 className="text-lg font-black text-white uppercase italic mb-6">{n.niche}</h3>
+                      <div className="text-xs space-y-3 font-black text-slate-500">
+                        <div className="flex justify-between">
+                          <span>MARKET FIT</span>
+                          <span className={n.finalScore >= 8 ? 'text-emerald-400' : n.finalScore >= 6 ? 'text-amber-400' : 'text-red-400'}>
+                            {n.finalScore >= 8 ? '🟢 High' : n.finalScore >= 6 ? '🟡 Medium' : '🔴 Low'} ({n.finalScore})
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>GROWTH</span>
+                          <span className={n.growth >= 7 ? 'text-emerald-400' : n.growth >= 4 ? 'text-amber-400' : 'text-red-400'}>
+                            {n.growth >= 7 ? '🟢 High' : n.growth >= 4 ? '🟡 Medium' : '🔴 Low'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>COMPETITION</span>
+                          <span className={n.competition <= 4 ? 'text-emerald-400' : n.competition <= 7 ? 'text-amber-400' : 'text-red-400'}>
+                            {n.competition <= 4 ? '🟢 Low' : n.competition <= 7 ? '🟡 Medium' : '🔴 High'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>MONEY</span>
+                          <span className={n.monetization >= 8 ? 'text-emerald-400' : n.monetization >= 5 ? 'text-amber-400' : 'text-red-400'}>
+                            {n.monetization >= 8 ? '🟢 High' : n.monetization >= 5 ? '🟡 Medium' : '🔴 Low'}
+                          </span>
                         </div>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-12 md:space-y-16" id="strategy-section">
-                    <div className="space-y-4 text-right">
-                       <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-white italic tracking-tight">Strategy Angle</h2>
-                       <p className="text-slate-500 font-bold uppercase tracking-[0.4em] text-[10px]">Select psychological Trigger</p>
-                       <p className="text-indigo-400 font-bold text-[11px]">Pick an angle to change emotional impact</p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                      {[
-                        { id: 'fear', name: 'Fear / Warning', icon: AlertTriangle, color: 'hover:border-red-500/50', desc: 'Survival Instinct' },
-                        { id: 'money', name: 'ROI / Wealth', icon: DollarSign, color: 'hover:border-emerald-500/50', desc: 'Resource Acquisition' },
-                        { id: 'mistake', name: 'Error / Fix', icon: Bomb, color: 'hover:border-amber-500/50', desc: 'Status Protection' },
-                        { id: 'default', name: 'Pure Viral', icon: Zap, color: 'hover:border-indigo-500/50', desc: 'High Velocity' },
-                      ].map((angle) => (
-                        <button key={angle.id} onClick={() => handleGenerateIdeas(angle.id)} disabled={!!loading} className={cn("p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] bg-white/[0.03] border border-white/5 transition-all text-left flex flex-col justify-between group h-36 md:h-52 relative overflow-hidden shadow-xl", selectedAngle === angle.id ? "bg-indigo-600/20 border-indigo-500/50" : "", angle.color)}>
-                          <div className="absolute top-0 right-0 p-6 md:p-8 opacity-5 group-hover:scale-110 transition-transform">
-                            <angle.icon className="w-24 h-24" />
-                          </div>
-                          <angle.icon className="w-8 h-8 mb-8 text-slate-600 group-hover:text-white transition-all transform group-hover:scale-110 relative z-10" />
-                          <div className="relative z-10">
-                            <div className="text-[10px] font-black uppercase tracking-[0.3em] mb-1">{angle.name}</div>
-                            <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{angle.desc}</div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="pt-6">
-                       <button onClick={() => handleGenerateIdeas()} className="w-full py-4 md:py-7 bg-indigo-600 text-white rounded-[2rem] md:rounded-[2.5rem] font-black text-xs md:text-sm tracking-[0.2em] md:tracking-[0.4em] shadow-2xl shadow-indigo-600/40 hover:bg-indigo-500 transition-all flex items-center justify-center gap-4">
-                         {loading === "ideas" ? (
-                           <>
-                             <Loader2 className="w-5 h-5 animate-spin" />
-                             SYNTHESIZING ELITE STRATEGIES...
-                           </>
-                         ) : (
-                           <>
-                             <Sparkles className="w-5 h-5" />
-                             GENERATE ELITE IDEAS
-                           </>
-                         )}
-                       </button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              </section>
 
-              <section className="space-y-12">
-                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-white/5 pb-8 gap-4 md:gap-0 relative">
-                    <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.5em] flex items-center gap-4">
-                      <BarChart3 className="w-5 h-5" />
-                      Current Market Heat Map
-                    </h2>
-                    <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-6 w-full md:w-auto">
-                      <span className="text-[10px] font-bold text-emerald-500 tracking-[0.1em] md:tracking-[0.3em] uppercase bg-emerald-500/5 px-3 md:px-4 py-1.5 md:py-2 rounded-full border border-emerald-500/10">Analyzed {videos.length} High-Velocity Videos</span>
-                      <span className="text-[10px] font-bold text-slate-600 tracking-widest uppercase hidden md:block">Updated Real-Time</span>
+                <div className="mt-16 max-w-5xl mx-auto bg-gradient-to-b from-[#0f0f13] to-[#0a0a0c] border-2 border-indigo-500/30 rounded-[4rem] p-8 md:p-16 text-left relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
+                  
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-12 border-b border-white/5 pb-8">
+                    <div>
+                      <h3 className="text-[10px] md:text-xs font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <Crown className="w-4 h-4" /> YOUR BEST MOVE RIGHT NOW
+                      </h3>
+                      <div className="text-4xl md:text-6xl font-black text-white italic truncate">{nicheDecision.winner}</div>
+                    </div>
+                    <div className="flex flex-col md:text-right mt-6 md:mt-0">
+                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Confidence Score</div>
+                      <div className="text-3xl font-black text-indigo-400">{nicheDecision.confidenceScore || "9.0"} / 10</div>
                     </div>
                   </div>
                   
-                  <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                    {videos.map((v, i) => (
-                      <motion.div variants={item} key={v.id} className="bg-white/[0.02] border border-white/5 rounded-[2.5rem] overflow-hidden group hover:border-indigo-500/30 transition-all shadow-xl">
-                        <div className="relative aspect-video">
-                          <img src={v.thumbnail} className="w-full h-full object-cover transition-transform group-hover:scale-105 opacity-80" alt="Video cover" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c] to-transparent opacity-90" />
-                          <div className="absolute top-4 left-4">
-                            <span className="px-3 py-1.5 bg-indigo-500/20 backdrop-blur-md rounded-lg text-[9px] font-black text-indigo-300 border border-indigo-500/30 uppercase tracking-widest">
-                              Used for analysis
-                            </span>
-                          </div>
-                          <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between">
-                             <span className="px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-xl text-[10px] font-black text-white border border-white/10 uppercase tracking-widest">
-                               Rank #{i+1}
-                             </span>
-                            <a href={`https://youtube.com/watch?v=${v.id}`} target="_blank" className="p-3 bg-indigo-600 rounded-full hover:bg-indigo-500 text-white transition-all shadow-lg hover:scale-110">
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                          </div>
-                        </div>
-                        <div className="p-4 md:p-6 rounded-2xl space-y-4 md:space-y-6">
-                          <h4 className="text-sm font-bold text-white line-clamp-2 leading-relaxed h-[2.8rem] group-hover:text-indigo-400 transition-colors" dangerouslySetInnerHTML={{ __html: v.title }} />
-                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-0 pt-6 border-t border-white/5">
-                            <div className="space-y-4">
-                              <div className="text-[9px] text-slate-600 font-black uppercase tracking-widest">Viral Momentum</div>
-                              <div className="text-sm font-black text-emerald-400 flex items-center gap-2">
-                                {new Intl.NumberFormat('en-US', { notation: 'compact' }).format(v.velocity)}
-                                <span className="text-[8px] text-slate-700 tracking-widest">/ HR</span>
-                              </div>
-                            </div>
-                            <div className="text-left lg:text-right space-y-4">
-                              <div className="text-[9px] text-slate-600 font-black uppercase tracking-widest">Recency</div>
-                              <div className="text-sm font-black text-slate-300 flex items-center lg:justify-end gap-2">
-                                <Calendar className="w-3.5 h-3.5 text-slate-700" />
-                                {Math.floor((Date.now() - new Date(v.publishedDate).getTime()) / (1000 * 60 * 60 * 24))} Days
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </motion.div>
-              </section>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div className="space-y-12">
+                       {/* 3. Why THIS works */}
+                       <div className="space-y-4">
+                         <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                           <Lightbulb className="w-4 h-4" /> Why THIS is the right move for YOU
+                         </h4>
+                         <ul className="text-slate-300 font-bold leading-relaxed text-sm space-y-2">
+                           {nicheDecision.reasoning?.map((reason: string, i: number) => (
+                             <li key={i} className="flex gap-2"><span className="text-emerald-500 shrink-0">•</span> <span>{reason}</span></li>
+                           ))}
+                         </ul>
+                       </div>
 
-              {/* Sticky Jump to Ideas button for mobile */}
-              {videos.length > 0 && ideas.length === 0 && !loading && (
-                <div className="fixed bottom-4 left-0 right-0 px-4 md:hidden z-50">
-                  <button 
-                    onClick={() => document.getElementById('strategy-section')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm tracking-[0.3em] shadow-2xl shadow-indigo-600/40 flex items-center justify-center gap-3 animate-bounce"
-                  >
-                    <Zap className="w-4 h-4" />
-                    Jump to Ideas
-                  </button>
-                </div>
-              )}
+                       {/* 4. Reality Check */}
+                       <div className="space-y-4">
+                         <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+                           <AlertTriangle className="w-4 h-4" /> Reality Check
+                         </h4>
+                         <div className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400 text-xs font-bold leading-relaxed space-y-3">
+                           <p className="uppercase tracking-widest text-[10px] text-amber-500 font-black">This is NOT easy. You will:</p>
+                           <ul className="space-y-2">
+                             {nicheDecision.realityCheck?.map((check: string, i: number) => (
+                               <li key={i} className="flex gap-2"><span className="shrink-0">•</span> <span>{check}</span></li>
+                             ))}
+                           </ul>
+                           <p className="text-amber-500/80 italic pt-2 border-t border-amber-500/20">Most people quit here.</p>
+                         </div>
+                       </div>
 
-              {ideas.length > 0 && (
-                <section className="space-y-12 md:space-y-20">
-                  <div className="text-center space-y-4">
-                    <h2 className="text-3xl md:text-5xl lg:text-6xl font-black text-white italic tracking-tighter">Elite Decision Output</h2>
-                    <div className="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-6">
-                      <span className="text-[10px] font-bold text-emerald-400 tracking-[0.1em] md:tracking-[0.3em] uppercase bg-emerald-500/5 px-4 py-2 rounded-full border border-emerald-500/10">
-                        Analyzed {videos.length} trending videos
-                      </span>
-                      <span className="text-[10px] font-bold text-indigo-400 tracking-[0.1em] md:tracking-[0.3em] uppercase bg-indigo-500/5 px-4 py-2 rounded-full border border-indigo-500/10">
-                        Updated just now
-                      </span>
-                      <span className="text-[10px] font-bold text-purple-400 tracking-[0.1em] md:tracking-[0.3em] uppercase bg-purple-500/5 px-4 py-2 rounded-full border border-purple-500/10">
-                        Based on real YouTube data
-                      </span>
+                       {/* 5. What it ACTUALLY demands */}
+                       <div className="space-y-4">
+                         <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                           <Zap className="w-4 h-4" /> What this niche ACTUALLY demands
+                         </h4>
+                         <div className="p-6 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-indigo-300 text-xs font-bold leading-relaxed space-y-3">
+                           <p className="uppercase tracking-widest text-[9px] text-indigo-400 font-black">To win here, you must:</p>
+                           <ul className="space-y-2">
+                             {nicheDecision.requirements?.map((req: string, i: number) => (
+                               <li key={i} className="flex gap-2"><span className="shrink-0">•</span> <span>{req}</span></li>
+                             ))}
+                           </ul>
+                         </div>
+                       </div>
+                    </div>
+
+                    <div className="space-y-12">
+                       {/* 6. Execution Path (Roadmap) */}
+                       <div className="space-y-4">
+                         <h4 className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                           <Calendar className="w-4 h-4" /> Your First 30 Days (Clear Roadmap)
+                         </h4>
+                         <div className="p-6 bg-white/[0.03] rounded-2xl border border-white/10 space-y-4">
+                           {nicheDecision.roadmap?.map((rm: any, i: number) => (
+                             <div key={i} className="text-xs space-y-1">
+                               <div className="text-emerald-400 font-black uppercase tracking-widest text-[10px]">{rm.week}:</div>
+                               <div className="text-slate-300 font-bold leading-relaxed">{rm.task}</div>
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+
+                       {/* 7. Future Projection */}
+                       <div className="space-y-4">
+                         <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                           <TrendingUp className="w-4 h-4" /> What happens if you stay consistent
+                         </h4>
+                         <div className="p-6 bg-black/40 rounded-2xl border border-white/5 space-y-3">
+                           {nicheDecision.projection?.map((proj: string, i: number) => (
+                             <p key={i} className="text-slate-400 font-bold leading-relaxed text-xs">
+                               {proj}
+                             </p>
+                           ))}
+                         </div>
+                       </div>
+
+                       {/* 8. Risk Warning */}
+                       <div className="space-y-4">
+                         <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2">
+                           <Flame className="w-4 h-4" /> Risks (Mentor Honesty)
+                         </h4>
+                         <div className="bg-red-500/5 border border-red-500/10 rounded-2xl p-5 text-red-400 text-xs font-bold leading-relaxed">
+                           <p className="uppercase tracking-widest text-[9px] mb-2 text-red-500/70">If you:</p>
+                           <ul className="space-y-2">
+                             {nicheDecision.risks?.map((risk: string, i: number) => (
+                               <li key={i} className="flex gap-2"><span className="shrink-0">•</span> <span>{risk}</span></li>
+                             ))}
+                           </ul>
+                         </div>
+                       </div>
+
+                       {/* 9. Second Option */}
+                       {nicheDecision.alternatives?.length > 0 && (
+                         <div className="space-y-4 pt-4 border-t border-white/5">
+                           <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                             <Layers className="w-4 h-4" /> Second Option
+                           </h4>
+                           {nicheDecision.alternatives.map((alt: any, i: number) => (
+                             <div key={i} className="text-slate-500 font-bold leading-relaxed text-xs space-y-2">
+                               <div className="text-white text-sm italic">{alt.name}</div>
+                               <div className="italic text-[10px] uppercase tracking-widest">Choose this ONLY if:</div>
+                               <div className="flex gap-2"><span className="shrink-0">•</span> {alt.condition}</div>
+                             </div>
+                           ))}
+                         </div>
+                       )}
                     </div>
                   </div>
 
-                  <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12">
-                    {ideas.map((idea) => (
-                      <motion.div variants={item} key={idea.id} className={cn("relative group", idea.isBestPick && "md:col-span-2 lg:col-span-1")}>
-                        {idea.isBestPick && <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/20 via-emerald-500/20 to-amber-500/20 blur-xl opacity-75" />}
-                        <div className={cn("relative bg-[#111114] border rounded-3xl md:rounded-[4rem] p-6 md:p-12 transition-all shadow-2xl overflow-hidden", idea.isBestPick ? "border-amber-500/40 md:scale-[1.02]" : "border-white/5 hover:border-indigo-500/40")}>
-                           
-                           <div className="flex flex-col lg:flex-row items-start justify-between gap-6 md:gap-8 mb-8 md:mb-10 text-left">
-                              <div className="space-y-4">
-                                <div className="flex items-center gap-4 flex-wrap">
-                                  {idea.validationScore && (
-                                    <span className={cn("text-xs font-black px-4 py-2 rounded-full border tracking-widest", idea.validationScore >= 8 ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" : idea.validationScore >= 7 ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-red-400 bg-red-500/10 border-red-500/20")}>
-                                      Quality Score: {idea.validationScore.toFixed(1)}/10
-                                    </span>
-                                  )}
-                                  <span className="text-[9px] font-black uppercase tracking-[0.3em] text-purple-400 px-3 py-1.5 bg-purple-500/5 rounded-xl border border-purple-500/20">{idea.trigger}</span>
-                                  <span className="text-[9px] font-black uppercase tracking-[0.3em] text-blue-400 px-3 py-1.5 bg-blue-500/5 rounded-xl border border-blue-500/20">{idea.format}</span>
-                                  <span className={cn("text-[9px] font-black uppercase tracking-[0.3em] px-3 py-1.5 rounded-xl border", idea.confidenceScore > 9 ? "text-amber-400 bg-amber-400/10 border-amber-400/20" : "text-white/60 bg-white/5 border-white/10")}>
-                                    Confidence: {idea.confidenceScore}
-                                  </span>
-                                </div>
-                                <h3 className="text-2xl md:text-3xl font-black text-white leading-[1.1] group-hover:text-indigo-400 transition-colors underline decoration-indigo-500/10 underline-offset-8">{idea.title}</h3>
-                                <p className="text-xs font-black text-indigo-500 bg-indigo-500/5 py-3 md:py-4 px-4 md:px-6 rounded-2xl italic flex items-center gap-3">
-                                  <Activity className="w-3 h-3" />
-                                  “{idea.hook}”
-                                </p>
-                              </div>
-                              <div className="flex flex-col gap-2 w-full lg:w-auto">
-                                <button 
-                                  onClick={() => {
-                                    if (isSubscribed) handleFetchPlan(idea);
-                                    else setActivePlan({ id: idea.id, content: "PAYWALL" });
-                                  }} 
-                                  className="w-full md:w-auto p-4 md:p-6 bg-indigo-600 text-white rounded-2xl md:rounded-3xl hover:bg-indigo-500 transition-all shadow-xl border border-white/10 shrink-0 group relative overflow-hidden flex items-center justify-center lg:justify-start"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <Sparkles className={cn("w-6 h-6", loading === `plan-${idea.id}` && "animate-spin")} />
-                                    <span className="font-black text-[10px] uppercase tracking-widest whitespace-nowrap">Plan</span>
-                                  </div>
-                                </button>
-                                <div className="flex flex-wrap lg:flex-nowrap gap-2 justify-center mt-2">
-                                  {[
-                                    { id: 'fear', icon: AlertTriangle, label: 'MISTAKE' },
-                                    { id: 'money', icon: DollarSign, label: 'MONEY' },
-                                    { id: 'controversy', icon: Bomb, label: 'CONTROVERSY' }
-                                  ].map(a => (
-                                    <button key={a.id} onClick={() => handlePivot(idea, a.id)} disabled={loading?.toString().startsWith('pivot')} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 flex items-center gap-2 hover:bg-white/10 transition-colors group">
-                                      <a.icon className="w-3 h-3 text-indigo-400 group-hover:scale-125 transition-transform" />
-                                      <span className="text-[7px] font-black uppercase text-slate-500 group-hover:text-white transition-colors">{a.id}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                           </div>
+                  <div className="mt-16 text-center space-y-4 flex flex-col items-center border-t border-white/5 pt-12">
+                    <button 
+                      onClick={() => {
+                        setKeyword(nicheDecision.winner);
+                        handleAnalyze(nicheDecision.winner);
+                      }}
+                      className="px-10 py-6 bg-indigo-600 hover:bg-white hover:text-indigo-600 text-white rounded-[2rem] font-black text-sm md:text-base uppercase tracking-[0.2em] transition-all shadow-2xl shadow-indigo-600/30 flex items-center gap-3"
+                    >
+                      🔥 Lock this niche & start creating
+                    </button>
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest mt-2">We’ll generate your first viral ideas instantly</p>
+                  </div>
+                </div>
+              </div>
+            </motion.section>
+          )}
 
-                           <div className="grid grid-cols-1 gap-6 mb-8 md:mb-10">
-                              <div className="p-5 md:p-8 bg-white/[0.02] rounded-2xl md:rounded-[2rem] border border-white/5 space-y-4 md:space-y-6 relative overflow-hidden text-left">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
-                                    <BrainCircuit className="w-4 h-4 text-indigo-500" />
-                                    Analysis
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <button onClick={() => copyToClipboard(idea.hook, `${idea.id}-hook`)} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg text-[8px] font-black uppercase text-slate-500 hover:text-white transition-colors">
-                                      {copiedId === `${idea.id}-hook` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                                      Hook
-                                    </button>
-                                    <button onClick={() => copyToClipboard(idea.concept, `${idea.id}-concept`)} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg text-[8px] font-black uppercase text-slate-500 hover:text-white transition-colors">
-                                      {copiedId === `${idea.id}-concept` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                                      Plan
-                                    </button>
-                                  </div>
-                                </div>
-                                <p className="text-xs text-slate-400 font-bold leading-relaxed">{idea.whyItWorks}</p>
-                              </div>
-                           </div>
-
-                           {idea.validationScore && (
-                             <div className="space-y-4 mb-10">
-                               {idea.isBestPick && (
-                                 <div className="p-4 bg-gradient-to-r from-amber-500/10 to-emerald-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between">
-                                   <div className="flex items-center gap-3">
-                                     <span className="text-xl">Trophy</span>
-                                     <div>
-                                       <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Best Pick</div>
-                                       <div className="text-xs text-slate-400">{idea.bestPickReason}</div>
-                                     </div>
-                                   </div>
-                                   {idea.recommendedToday && (
-                                     <span className="px-3 py-1.5 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-[9px] font-black text-emerald-400 uppercase tracking-widest hidden sm:block">
-                                       Recommended to post today
-                                     </span>
-                                   )}
-                                 </div>
-                               )}
-                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                                 <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/5 text-center">
-                                   <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Hook</div>
-                                   <div className={cn("text-lg font-black", idea.hookStrength >= 8 ? "text-emerald-400" : idea.hookStrength >= 6 ? "text-amber-400" : "text-red-400")}>{idea.hookStrength}/10</div>
-                                 </div>
-                                 <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/5 text-center">
-                                   <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Original</div>
-                                   <div className={cn("text-lg font-black", idea.originality >= 8 ? "text-emerald-400" : idea.originality >= 6 ? "text-amber-400" : "text-red-400")}>{idea.originality}/10</div>
-                                 </div>
-                                 <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/5 text-center">
-                                   <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Clarity</div>
-                                   <div className={cn("text-lg font-black", idea.clarity >= 8 ? "text-emerald-400" : idea.clarity >= 6 ? "text-amber-400" : "text-red-400")}>{idea.clarity}/10</div>
-                                 </div>
-                                 <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/5 text-center">
-                                   <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Viral</div>
-                                   <div className={cn("text-lg font-black", idea.viralityPotential >= 8 ? "text-emerald-400" : idea.viralityPotential >= 6 ? "text-amber-400" : "text-red-400")}>{idea.viralityPotential}/10</div>
-                                 </div>
-                               </div>
-                               {idea.whyNotHigher && (
-                                 <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-xl text-left">
-                                   <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Why not higher?</div>
-                                   <div className="text-xs text-slate-400">{idea.whyNotHigher}</div>
-                                 </div>
-                               )}
-                               <div className="pt-4 border-t border-white/5">
-                                 <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Try a stronger version?</div>
-                                 <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
-                                   <button 
-                                     onClick={() => handlePivot(idea, 'viral')}
-                                     disabled={loading?.toString().startsWith('pivot')}
-                                     className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-[9px] font-black uppercase text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
-                                   >
-                                     More Viral
-                                   </button>
-                                   <button 
-                                     onClick={() => handlePivot(idea, 'controversy')}
-                                     disabled={loading?.toString().startsWith('pivot')}
-                                     className="px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-xl text-[9px] font-black uppercase text-purple-400 hover:bg-purple-500/20 transition-all disabled:opacity-50"
-                                   >
-                                     More Controversial
-                                   </button>
-                                   <button 
-                                     onClick={() => handlePivot(idea, 'money')}
-                                     disabled={loading?.toString().startsWith('pivot')}
-                                     className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[9px] font-black uppercase text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-50"
-                                   >
-                                     Money-Focused
-                                   </button>
-                                   <button 
-                                     onClick={() => handlePivot(idea, 'simple')}
-                                     disabled={loading?.toString().startsWith('pivot')}
-                                     className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[9px] font-black uppercase text-blue-400 hover:bg-blue-500/20 transition-all disabled:opacity-50"
-                                   >
-                                     Make it Simpler
-                                   </button>
-                                 </div>
-                               </div>
-                             </div>
-                           )}
-
-                           {activePlan?.id === idea.id && (
-                              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-16 pt-16 border-t border-white/5 space-y-12 text-left">
-                                 {activePlan?.content === "PAYWALL" && !isSubscribed ? (
-                                   <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2rem] md:rounded-[3rem] p-8 md:p-12 text-center space-y-8 relative overflow-hidden">
-                                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
-                                      <div className="space-y-4">
-                                        <h3 className="text-2xl md:text-3xl font-black text-white italic">YOU'RE ONE STEP AWAY.</h3>
-                                        <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest leading-relaxed max-w-sm mx-auto">
-                                          Unlock full blueprints, AI scene boards, and trend intelligence for your niche.
-                                        </p>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
-                                         {[
-                                           { label: 'Elite VO Scripts', icon: Music },
-                                           { label: 'Scene Cues', icon: Camera },
-                                           { label: 'AI Prompts', icon: Eye },
-                                           { label: 'No Limits', icon: Zap },
-                                         ].map((feat, i) => (
-                                           <div key={i} className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
-                                              <feat.icon className="w-4 h-4 text-indigo-400" />
-                                              <span className="text-[10px] font-black uppercase text-slate-400">{feat.label}</span>
-                                           </div>
-                                         ))}
-                                      </div>
-                                      <button 
-                                        onClick={() => setIsSubscribed(true)}
-                                        className="w-full md:w-auto px-8 md:px-12 py-4 md:py-6 bg-white text-black rounded-full font-black text-[10px] md:text-xs tracking-[0.2em] md:tracking-[0.4em] hover:bg-indigo-100 transition-all shadow-2xl"
-                                      >
-                                        UPGRADE FOR ₹499/MONTH
-                                      </button>
-                                   </div>
-                                 ) : (
-                                   <>
-                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-                                        {[
-                                          { label: 'Scene Board', icon: Camera, color: 'text-blue-400' },
-                                          { label: 'AI Prompts', icon: Eye, color: 'text-purple-400' },
-                                          { label: 'Fast Edits', icon: Edit3, color: 'text-amber-400' },
-                                          { label: 'Elite VO', icon: Music, color: 'text-emerald-400' },
-                                        ].map((m, i) => (
-                                          <div key={i} className="p-6 bg-white/[0.03] rounded-3xl border border-white/5 flex flex-col items-center gap-4 group cursor-help transition-all hover:bg-white/10">
-                                             <m.icon className={cn("w-5 h-5", m.color)} />
-                                             <span className="text-[9px] font-black uppercase text-slate-600 tracking-[0.2em]">{m.label}</span>
-                                          </div>
-                                        ))}
-                                     </div>
-                                     <div className="bg-[#050505] rounded-2xl md:rounded-[3rem] p-6 md:p-12 font-mono text-[11px] text-slate-500 leading-9 whitespace-pre-wrap border border-white/10 shadow-inner relative group text-left">
-                                       <div className="absolute top-4 right-4 md:top-8 md:right-12 text-[9px] font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                                         <FileText className="w-3 h-3" />
-                                         Execution Script v1.0
-                                       </div>
-                                       {activePlan?.content}
-                                     </div>
-                                   </>
-                                 )}
-                              </motion.div>
-                            )}
-                        </div>
-                      </motion.div>
+          {!isNicheActive && videos.length > 0 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-40">
+              <section className="bg-white/[0.02] border border-white/5 rounded-[4rem] p-16 grid grid-cols-1 lg:grid-cols-2 gap-20">
+                <div className="space-y-12">
+                  <h2 className="text-5xl font-black text-white italic tracking-tight uppercase">Pattern Intelligence</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {detectedPatterns.map((p, i) => (
+                      <div key={i} className="p-5 bg-white/5 border border-white/10 rounded-2xl">
+                        <div className="text-[10px] font-black uppercase text-indigo-400 mb-2">{p.type}</div>
+                        <div className="text-xs text-slate-300 font-bold">{p.pattern}</div>
+                      </div>
                     ))}
-                  </motion.div>
+                  </div>
+                </div>
+                <div className="space-y-12 text-right">
+                  <h2 className="text-5xl font-black text-white italic tracking-tight uppercase">Strategy Angle</h2>
+                  <div className="grid grid-cols-2 gap-4">
+                    {['fear', 'money', 'mistake', 'default'].map(a => (
+                      <button key={a} onClick={() => handleGenerateIdeas(a)} className={cn("p-8 rounded-[3rem] bg-white/[0.03] border border-white/5 text-left font-black uppercase tracking-widest text-xs", selectedAngle === a && "bg-indigo-600/20 border-indigo-500")}>
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => handleGenerateIdeas()} className="w-full py-7 bg-indigo-600 text-white rounded-[2.5rem] font-black text-sm tracking-widest">GENERATE ELITE IDEAS</button>
+                </div>
+              </section>
+
+              <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {videos.map(v => (
+                  <div key={v.id} className="bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 space-y-6 group">
+                    <div className="relative aspect-video rounded-2xl overflow-hidden">
+                       <img src={v.thumbnail} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform" />
+                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                    </div>
+                    <h4 className="text-sm font-bold text-white line-clamp-2" dangerouslySetInnerHTML={{ __html: v.title }} />
+                    
+                    <button 
+                      onClick={() => handleAnalyzeVideo(v)}
+                      className="w-full py-3 bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/30 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Deep Audit Strategy
+                    </button>
+
+                    {activeVideoAudit?.id === v.id && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="pt-6 space-y-6 border-t border-white/5 overflow-hidden text-left">
+                         {!activeVideoAudit?.data ? (
+                           <div className="text-[9px] font-black uppercase text-indigo-400 animate-pulse">Forensic Audit in progress...</div>
+                         ) : (
+                           <div className="space-y-6">
+                              <div className="space-y-2">
+                                 <h5 className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Growth Chemistry</h5>
+                                 {activeVideoAudit?.data?.growthChemistry?.map((c: string, i: number) => (
+                                   <p key={i} className="text-[10px] text-slate-400 font-bold">• {c}</p>
+                                 ))}
+                              </div>
+                              <div className="space-y-2">
+                                 <h5 className="text-[9px] font-black text-red-400 uppercase tracking-widest">Mistakes to Avoid</h5>
+                                 {activeVideoAudit?.data?.mistakesToAvoid?.map((m: string, i: number) => (
+                                   <p key={i} className="text-[10px] text-slate-400 font-bold">⚠ {m}</p>
+                                 ))}
+                              </div>
+                              <div className="p-4 bg-black/40 rounded-xl border border-white/5">
+                                 <h5 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Likely Framework</h5>
+                                 <p className="text-[10px] text-slate-300 font-mono leading-relaxed">{activeVideoAudit?.data?.framework}</p>
+                              </div>
+                           </div>
+                         )}
+                      </motion.div>
+                    )}
+                  </div>
+                ))}
+              </section>
+
+              {ideas.length > 0 && (
+                <section className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  {ideas.map(idea => (
+                    <div key={idea.id} className="bg-[#111114] border border-white/5 rounded-[4rem] p-12 space-y-10">
+                      <div className="space-y-4">
+                        <div className="flex gap-3">
+                          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest px-3 py-1.5 bg-indigo-500/10 rounded-xl">{idea.trigger}</span>
+                          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest px-3 py-1.5 bg-emerald-500/10 rounded-xl">{idea.validationScore?.toFixed(1)}/10</span>
+                        </div>
+                        <h3 className="text-3xl font-black text-white italic uppercase">{idea.title}</h3>
+                        <p className="text-xl font-bold text-indigo-400 italic">“{idea.hook}”</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <button onClick={() => handleFetchPlan(idea)} className="py-6 bg-white/5 border border-white/10 rounded-3xl text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">Basic Blueprint</button>
+                        <button onClick={() => handleFetchFabula(idea)} className="py-6 bg-indigo-600 rounded-3xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20">
+                          <Crown className="w-3 h-3" />
+                          Story Mode
+                        </button>
+                      </div>
+
+                      {activePlan?.id === idea.id && (
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-black/50 p-8 rounded-3xl font-mono text-[11px] text-slate-500 leading-relaxed overflow-hidden border border-white/5">
+                          {activePlan?.content}
+                        </motion.div>
+                      )}
+
+                      {(() => {
+                        const fabula = activeFabula?.id === idea.id ? activeFabula?.data : null;
+                        if (!fabula) return null;
+                        
+                        return (
+                          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pt-8 border-t border-white/5 text-left">
+                            <div className="space-y-4">
+                              <h4 className="text-xs font-black text-indigo-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <BrainCircuit className="w-4 h-4" /> 1. Core Story (Fabula)
+                              </h4>
+                              <div className="p-6 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl italic text-slate-300 font-bold leading-relaxed">
+                                "{fabula.fabula?.coreStory}"
+                                <div className="mt-4 text-[9px] font-black uppercase text-indigo-500/60">Change: {fabula.fabula?.theChange}</div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-4">
+                              <h4 className="text-xs font-black text-purple-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <Layers className="w-4 h-4" /> 2. Narrative Flow (Syuzhet)
+                              </h4>
+                              <div className="space-y-3">
+                                {fabula.syuzhet?.map((s: any, idx: number) => (
+                                  <div key={idx} className="p-4 bg-white/[0.03] border border-white/5 rounded-xl flex gap-4">
+                                    <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-[10px] font-black">{idx + 1}</div>
+                                    <div>
+                                      <div className="text-[10px] font-black text-white uppercase italic">{s.scene}</div>
+                                      <p className="text-[10px] text-slate-500 font-bold mt-1">{s.action}</p>
+                                      <div className="text-[9px] text-purple-500/60 font-black uppercase mt-2">Conflict: {s.internalConflict}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="space-y-4">
+                              <h4 className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <Camera className="w-4 h-4" /> 3. Script + Visuals
+                              </h4>
+                              <div className="p-6 bg-black/40 rounded-3xl font-mono text-[10px] text-slate-400 leading-relaxed border border-white/5 whitespace-pre-wrap">
+                                <div className="mb-4 text-emerald-500/60 uppercase font-black">Aesthetic: {fabula.production?.visualStyle}</div>
+                                {fabula.production?.script}
+                                <div className="mt-6 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                                  🔁 <strong>Loop:</strong> {fabula.production?.loopLogic}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })()}
+                    </div>
+                  ))}
                 </section>
               )}
             </motion.div>
           )}
         </AnimatePresence>
 
-        <footer className="mt-24 md:mt-48 pt-12 md:pt-16 border-t border-white/5 text-center space-y-8">
-           <div className="flex items-center justify-center gap-6 md:gap-12 opacity-20 grayscale transition-all hover:opacity-50 hover:grayscale-0">
-             <Video className="w-5 h-5 md:w-6 md:h-6" />
-             <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
-             <Activity className="w-5 h-5 md:w-6 md:h-6" />
-             <Zap className="w-5 h-5 md:w-6 md:h-6" />
-           </div>
-           <p className="text-[8px] md:text-[10px] text-slate-700 font-black uppercase tracking-[0.3em] md:tracking-[0.6em] px-4">Powered by Intelligence Engine 2.5 • Decision Architecture 1.0</p>
+        <footer className="mt-48 pt-16 border-t border-white/5 text-center">
+          <p className="text-[10px] text-slate-700 font-black uppercase tracking-[0.6em]">Powered by Intelligence Engine 2.5 • Decision Architecture 1.0</p>
         </footer>
       </main>
     </div>
